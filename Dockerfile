@@ -15,6 +15,9 @@ RUN python src/train/train.py
 # ---------- stage 2: runtime ----------
 FROM ${BASE_IMAGE} AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PATH="/opt/venv/bin:$PATH"
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/*
 RUN useradd --create-home --uid 10001 appuser
 WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
