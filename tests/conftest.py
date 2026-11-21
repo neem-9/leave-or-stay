@@ -17,7 +17,7 @@ def model_dir(tmp_path_factory):
 
 @pytest.fixture(scope="session")
 def client(model_dir):
-    import src.app.main as main  # imported only now, so it loads the model trained above
+    from src.app import main  # imported only now, so it loads the model trained above
 
     return TestClient(main.app)
 

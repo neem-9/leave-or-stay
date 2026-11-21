@@ -6,7 +6,7 @@ python -m src.train.train
 import hashlib
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import joblib
@@ -53,7 +53,7 @@ def train(data_file: str = DATA_FILE, out_dir: Path = MODEL_DIR) -> dict:
         "data_sha256": hashlib.sha256(Path(data_file).read_bytes()).hexdigest()[:12],
         "auc": round(auc, 3),
         "f1": round(f1, 3),
-        "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "trained_at": datetime.now(UTC).isoformat(timespec="seconds"),
     }
     (out_dir / "metadata.json").write_text(json.dumps(meta, indent=2))
     return meta

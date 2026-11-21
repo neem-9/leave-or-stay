@@ -17,7 +17,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import joblib
@@ -73,7 +73,7 @@ def promote(candidate: dict) -> None:
         "auc": round(candidate["auc"], 3),
         "f1": round(candidate["f1"], 3),
         "p95_latency_ms": round(candidate["p95_latency_ms"], 2),
-        "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "trained_at": datetime.now(UTC).isoformat(timespec="seconds"),
     }
     (ARTIFACTS / "metadata.json").write_text(json.dumps(meta, indent=2))
     CHAMPION_FILE.write_text(json.dumps(meta, indent=2))
