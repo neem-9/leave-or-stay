@@ -22,6 +22,7 @@ FROM python:3.12.15-slim-trixie
 LABEL org.opencontainers.image.title="ai381-churn-starter" \
       org.opencontainers.image.description="AI381 Machine Learning Operations churn API starter"
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 MODEL_DIR=/app/models
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 RUN useradd --create-home --uid 10001 app
 WORKDIR /app
 COPY --from=builder /install /usr/local
