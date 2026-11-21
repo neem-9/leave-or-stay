@@ -1,4 +1,12 @@
-"""Train the churn model and save it to models/leave_or_stay.joblib."""
+"""Train the churn model, check its quality, and save it with metadata that says exactly what it is.
+
+python -m src.train.train
+"""
+
+import hashlib
+import json
+import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 import joblib
@@ -10,44 +18,46 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-ROOT = Path(__file__).resolve().parents[2]
-DATA_PATH = ROOT / "data" / "churn_v2.csv"
-MODEL_PATH = ROOT / "models" / "leave_or_stay.joblib"
+from src import schema
 
-NUMERIC = ["tenure_months", "monthly_charges", "support_calls"]
-CATEGORICAL = ["contract", "internet_service"]
-
-
-def build_pipeline() -> Pipeline:
-    prep = ColumnTransformer([
-        ("num", StandardScaler(), NUMERIC),
-        ("cat", OneHotEncoder(handle_unknown="ignore"), CATEGORICAL),
-    ])
-    return Pipeline([
-        ("prep", prep),
-        ("clf", LogisticRegression(max_iter=1000)),
-    ])
+DATA_FILE = "data/churn_v1.csv"  # the data file the model is trained on
+MIN_AUC = 0.70  # quality gate: a worse model never gets packaged
+MODEL_DIR = Path(os.getenv("MODEL_DIR", "models"))
 
 
-def main() -> None:
-    df = pd.read_csv(DATA_PATH).rename(columns={"monthly_fee": "monthly_charges"})
-    X = df[NUMERIC + CATEGORICAL]
-    y = df["churn"]
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+def build_model() -> Pipeline:
+    prep = ColumnTransformer(
+        [
+            ("num", StandardScaler(), schema.NUMERIC),
+            ("cat", OneHotEncoder(handle_unknown="ignore"), schema.CATEGORICAL),
+        ]
     )
+    return Pipeline([("prep", prep), ("clf", LogisticRegression(max_iter=1000))])
 
-    model = build_pipeline()
-    model.fit(X_train, y_train)
 
-    proba = model.predict_proba(X_test)[:, 1]
-    print("F1 :", round(f1_score(y_test, proba > 0.5), 3))
-    print("AUC:", round(roc_auc_score(y_test, proba), 3))
+def train(data_file: str = DATA_FILE, out_dir: Path = MODEL_DIR) -> dict:
+    df = schema.validate(pd.read_csv(data_file))
+    X, y = df[schema.FEATURES], df[schema.TARGET]
+    X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+    model = build_model().fit(X_tr, y_tr)
+    proba = model.predict_proba(X_te)[:, 1]
+    auc, f1 = roc_auc_score(y_te, proba), f1_score(y_te, proba > 0.5)
+    if auc < MIN_AUC:
+        raise SystemExit(f"Quality gate failed: AUC {auc:.3f} is below {MIN_AUC}")
 
-    MODEL_PATH.parent.mkdir(exist_ok=True)
-    joblib.dump(model, MODEL_PATH)
-    print(f"saved {MODEL_PATH}")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    joblib.dump(model, out_dir / "model.joblib")
+    meta = {
+        "model_version": os.getenv("GIT_SHA", "local")[:7],
+        "data_file": data_file,
+        "data_sha256": hashlib.sha256(Path(data_file).read_bytes()).hexdigest()[:12],
+        "auc": round(auc, 3),
+        "f1": round(f1, 3),
+        "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+    (out_dir / "metadata.json").write_text(json.dumps(meta, indent=2))
+    return meta
 
 
 if __name__ == "__main__":
-    main()
+    print(json.dumps(train(), indent=2))
